@@ -1,0 +1,3 @@
+#ignore file lists
+db.sqlite3
+.idea/*
