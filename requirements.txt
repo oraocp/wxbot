@@ -1,1 +1,4 @@
-Django 3
+# 记录所有依赖包及其精确的版本号,以便新环境部署
+django > 1.10.8 , <2.0.1
+requests >= 2.18.0
+cryptograph >= 2.1.4

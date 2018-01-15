@@ -118,3 +118,69 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
 
 STATIC_URL = '/static/'
+
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
+
+# 上传文件配置
+MEDIA_URL = '/media/'
+# 动态文件上传路径
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# 站点日志配置
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(asctime)s:%(filename)s-%(levelname)s:%(message)s',
+            'datefmt':'%Y-%m-%d-%H:%M:%S'
+        }
+    },
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse'
+        }
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'log_file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': 'logs/wxbot.log',  # 日志输出文件， 目录必须存在？
+            'maxBytes': 1024 * 1024 * 5,  # 文件大小
+            'backupCount': 5,  # 备份份数
+            'formatter':'simple',
+        },
+    },
+    'loggers': {
+        'weixin': {
+            'handlers': ['console', 'log_file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'wxbot': {
+            'handlers': ['console', 'log_file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'root': {
+            'handlers': ['console', 'log_file'],
+            'level': 'INFO',
+            'propagate': True,
+        }
+    }
+}
+
+WX_SETTINGS = {
+    "main": {
+        "appid": "wxff1ec8c09ae8c622",
+        "token": "resplendsky",
+        "secret": "a261f13b3f1067894616608fc08ef944",
+        "encodingAESKey": "ATAQEUbhPfxqUEwI3KkemTuS1tRrhKyUH1yC1iuvT6J",
+        "type": 10,
+    },
+}
