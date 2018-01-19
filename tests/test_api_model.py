@@ -36,7 +36,8 @@ class TestApiModel(TestCase):
                                                    {'type': 'click', 'name': '我的保单', 'key': 'WDBD', 'sub_button': []},
                                                    {'type': 'click', 'name': '我的理赔', 'key': 'WDLP', 'sub_button': []}]}]}}
         menu = WxMenu(dic)
-        print(menu)
+        dic2 = json.loads(menu.to_json())
+        print(dic2)
 
     def test_subscripter(self):
         dic = {'subscribe': 1, 'openid': 'o6a4U0grN2cwJKSu_2tFQN6THWrw', 'nickname': '张少坡', " \

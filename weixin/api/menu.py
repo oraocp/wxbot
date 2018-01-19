@@ -9,6 +9,13 @@ from weixin.api.models import Jsonable
 import json
 
 
+def parse_menuitem(obj):
+    if isinstance(obj, MenuItem):
+        return obj.to_json()
+    else:
+        raise TypeError('%r is not JSON serializable' % obj)
+
+
 class WxMenu(Jsonable):
     """
     自定义菜单对象，
@@ -32,6 +39,9 @@ class WxMenu(Jsonable):
                     menuitme = menuclass(subbutton)
                     submenu.add_submenuitem(menuitme)
                 self.items.append(submenu)
+
+    def to_json(self):
+        return json.dumps(self.items, default=parse_menuitem)
 
 
 MENUITEM_TYPES = {}
@@ -59,6 +69,9 @@ class MenuItem(Jsonable, metaclass=MenuItemMetaClass):
 
     def add_submenuitem(self, sub_menuitem):
         self.sub_button.append(sub_menuitem)
+
+    def to_json(self):
+        return json.dumps(self.__dict__, default=parse_menuitem)
 
 
 class ClickMenuItem(MenuItem):
