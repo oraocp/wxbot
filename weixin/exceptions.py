@@ -42,7 +42,7 @@ class AccountDisabled(WxExcepion):
 
 def check_api_error(result):
     if result and isinstance(result, dict):
-        if "errcode" in result.keys():
+        if "errcode" in result.keys() and result["errcode"] != 0:
             raise WxApiException(result["errcode"], result.get("errmsg", ""))
 
 

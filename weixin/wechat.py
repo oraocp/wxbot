@@ -47,7 +47,7 @@ class EchoHandler(Handler):
         retval = ""
         if msg and isinstance(msg, TextInputMessage):
             retval = render_text(msg.fromUserName, msg.toUserName,
-                                                 "收到来自%s的消息。\\n内容为'%s'" % (msg.fromUserName, msg.content))
+                                 "收到来自%s的消息。消息内容为'%s'" % (msg.fromUserName, msg.content))
         return retval
 
 
@@ -82,7 +82,7 @@ class _Handlerer(Lockable):
                 self.default_handler = EchoHandler()
             return self.default_handler.handle(record)
         else:
-            log.debug("进入消息处理过程，处理器为:"+str(type(self.handler_list[0])))
+            log.debug("进入消息处理过程，处理器为:" + str(type(self.handler_list[0])))
             for h in self.handler_list:
                 if hasattr(h, 'handle'):
                     result = h.handle(record)
@@ -197,7 +197,7 @@ class WxAccount(_Handlerer):
         b_encrypt = False
         log.debug("准备进入消息转字典的过程...")
         msg_dict = msgtodict(msgdata)
-        log.debug("解析后的消息类型为:"+msg_dict["MsgType"])
+        log.debug("解析后的消息类型为:" + msg_dict["MsgType"])
         if "Encrypt" in msg_dict.keys():
             # 消息已加密
             b_encrypt = True
