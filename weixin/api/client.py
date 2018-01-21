@@ -9,8 +9,8 @@ import requests
 from weixin.api.models import *
 from weixin.exceptions import check_api_error
 from weixin.logger import log
-from weixin.utils import Lockable
-
+from weixin.utils import Lockable, deprecated
+from weixin.api.menu import WxMenu
 
 # ---------------------------------------------------------------------------
 #   Requestor
@@ -36,6 +36,7 @@ class DefaultRequstor(Requestor):
     def get(self, url, params=None, **kwargs):
         r = requests.get(url, params=params, **kwargs)
         if isinstance(r, requests.Response):
+            print(r.text)
             # 假定微信返回的结果都是json字符串
             r = r.json()
             check_api_error(r)
@@ -127,7 +128,7 @@ class WxClient(Lockable):
         """
         url = "https://api.weixin.qq.com/cgi-bin/menu/get?access_token={0}".format(self.token)
         r = self.requestor.get(url)
-        return r
+        return WxMenu(r)
 
     def remove_menus(self):
         """
@@ -135,6 +136,7 @@ class WxClient(Lockable):
         """
         url = "https://api.weixin.qq.com/cgi-bin/menu/delete?access_token={0}".format(self.token)
         r = self.requestor.get(url)
+
         return r
 
     # ---------------------------------------------------------------------------
@@ -281,11 +283,11 @@ class WxClient(Lockable):
         return r["media_id"]
 
     # ---------------------------------------------------------------------------
-    # ~ 粉丝相关
+    # ~ 微信用户相关
 
     def get_userinfo(self, openid, lang="zh_CN"):
         """
-        获取粉丝基本信息
+        获取微信用户基本信息
         :param open_id:
         :return:
         """
@@ -307,27 +309,107 @@ class WxClient(Lockable):
         params = {}
         if first_open_id:
             params["next_openid"] = first_open_id
-        r =  self.requestor.get(url, params)
+        r = self.requestor.get(url, params)
         return SubscriberInfos(r)
 
     # ---------------------------------------------------------------------------
-    # ~ 粉丝组相关
+    # ~ 微信用户标签相关
+    # ~ https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421140837
+    # ~ 注：2016,微信已用标签管理取代以前的分组管理，公众号的运营者可以给一个用户打上更多的标签，而不再是之前的单一的分组 ，
 
-    def create_group(self, name):
+    def create_tag(self, name):
         """
-        创建粉丝组别
-        一个公众账号，最多支持创建500个分组
-        :param name: 组别名称（30个字符以内）
+        创建新的公众号用户标签
+        一个公众账号，最多支持创建100个标签
+        :param name: 标签名称（30个字符以内）
+        :return: 标签对象
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/tags/create?access_token={0}".format(self.token)
+        # '{"tag": {"name": "ChenMing2"}}'
+        data = '{"tag":{"name":"%s"}}' % name
+        r = self.requestor.post(url, data=data)
+        return Tag(r["id"], r["name"])
+
+    def get_all_tags(self):
+        """
+        获取公众号下所有的用户标签
+        :return: 公众号下所有的用户标签
+        """
+        tags = []
+        url = "https://api.weixin.qq.com/cgi-bin/tags/get?access_token={0}".format(self.token)
+        r = self.requestor.get(url)
+        for g in r["tags"]:
+            tags.append(Tag(g["id"], g["name"], g["count"]))
+        return tags
+
+    def update_tag(self, id, new_name):
+        """
+        编辑公众号下的用户标签
+        :param id: 标签标识
+        :param new_name: 标签的新名称
+        :return: 标签对象
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/tags/update?access_token={0}".format(self.token)
+        data = '{"tag":{"id":%d,"name":"%s"}}' % (id, new_name)
+        self.requestor.post(url, data=data)
+
+    def remove_tag(self, id):
+        """
+        删除用户标签
+        :param id: 标签标识
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/tags/delete?access_token={0}".format(self.token)
+        data = '{"tag":{"id":%d}}' % id
+        self.requestor.post(url, data=data)
+
+    def get_users_in_tag(self, id, next_openid=''):
+        """
+        获取标签下粉丝列表
+        :param id: 标签标识
         :return:
         """
-        url = "https://api.weixin.qq.com/cgi-bin/groups/create?access_token={0}".format(self.token)
-        data = {"group": {"name": name}}
+        url = "https://api.weixin.qq.com/cgi-bin/user/tag/get?access_token={0}".format(self.token)
+        data = '{"tag":%d, "next_openid":"%s"}' % (id, next_openid)
         r = self.requestor.post(url, data=data)
-        return Group(r["id"], r["name"])
+        return r["count"]
 
+    def tag_users(self, id, users):
+        """
+        批量为用户打标签
+        标签功能目前支持公众号为用户打上最多20个标签
+        :param id:
+        :param users:
+        :return:
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/user/tag/get?access_token={0}".format(self.token)
+        data = '{"tagid":%d, "openid_list":"[%s]"}' % (id, ''.join())
+        r = self.requestor.post(url, data=data)
+        return r["count"]
+
+    def cancel_tag_users(selfself, id, users):
+        """
+        批量为用户取消标签
+        :param id:
+        :param users:
+        :return:
+        """
+        pass
+
+    def get_tags_in_user(self, openid):
+        """
+        获取用户身上的标签列表
+        :param openid:
+        :return:
+        """
+        pass
+
+    # ---------------------------------------------------------------------------
+    # ~ 微信用户组相关， 已废弃
+
+    @deprecated()
     def get_all_group(self):
         """
-        获取公众号的所有粉丝组别
+        获取公众号的所有微信用户组别
         :return:
         """
         groups = []
@@ -339,8 +421,8 @@ class WxClient(Lockable):
 
     def get_user_group(self, open_id):
         """
-        获取粉丝所在的组信息
-        :param open_id:  粉丝的标识
+        获取微信用户所在的组信息
+        :param open_id:  微信用户的标识
         :return: 组信息
         """
         url = "https://api.weixin.qq.com/cgi-bin/groups/getid?access_token={0}".format(self.token)
@@ -349,7 +431,7 @@ class WxClient(Lockable):
 
     def update_group(self, group_id, group_name):
         """
-        更新粉丝组信息
+        更新微信用户组信息
         :param group_id:  组标识
         :param group_name: 组名称
         :return:
@@ -360,7 +442,7 @@ class WxClient(Lockable):
 
     def remove_group(self, group_id):
         """
-        删除粉丝组
+        删除微信用户组
         :param group_id:
         :return:
         """

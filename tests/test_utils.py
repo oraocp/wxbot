@@ -4,6 +4,7 @@
 # 创建日期：2018/1/4
 # -------------------------------------------------------------------------
 import string
+import json
 from unittest import TestCase
 from xml.etree.ElementTree import ParseError
 
@@ -11,6 +12,11 @@ from weixin.utils import *
 from hashlib import sha1
 
 class TestUtils(TestCase):
+
+    def test_encoding(self):
+        dic = {"title":"中国人","content": "Chineses is goood mans"}
+        print(json.dumps(dic)) #\u4e2d\u56fd\u4eba
+        print(json.dumps(dic, ensure_ascii=False)) #中国人
 
     def get_signature(token, timestamp, nonce ):
         sign = [token, timestamp, nonce]

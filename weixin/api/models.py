@@ -11,7 +11,7 @@ from enum import Enum
 
 class Jsonable(object):
     def to_json(self):
-        return json.dumps(self.__dict__)
+        return json.dumps(self.__dict__, ensure_ascii=False)
 
     def __str__(self):
         return self.to_json()
@@ -132,13 +132,22 @@ class Group(Jsonable):
         # 分组标识
         self.id = id
         # 分组名称
-        if isinstance(name, bytes):
-            name = name.decode()
-        self.name = name  # 转unicode字符?
+        self.name = name
         # 组内用户数量
         self.count = count
 
-
+class Tag(Jsonable):
+    """
+    定义用户标签对象
+    """
+    def __init__(self, id, name, count=0):
+        Jsonable.__init__(self)
+        # 标签标识
+        self.id = id
+        # 标签名称
+        self.name = name
+        # 标签对应的用户数量
+        self.count = count
 # ---------------------------------------------------------------------------
 #   永久素材管理
 # ---------------------------------------------------------------------------

@@ -91,6 +91,29 @@ class Activator:
         return clsmeta(*args, **kwargs)
 
 
+class deprecated(object):
+    """
+    打印函数已废弃的警告
+
+    >>> @deprecated()
+    ... def f():
+    ...    pass
+    >>> f()
+    ... f is deprectead.
+    """
+
+    def _wrapper(self, *args, **kwargs):
+        self.count += 1
+        if self.count == 1:
+            print(self.func.__name__, 'is deprecated.')
+        return self.func(*args, **kwargs)
+
+    def __call__(self, func):
+        self.func = func
+        self.count = 0
+        return self._wrapper
+
+
 class Lockable(object):
     def __init__(self):
         if threading:
@@ -131,7 +154,7 @@ def parse_message(dic):
 def parse_event(dic):
     # assert (dic['MsgType'].lower() == 'event')
     event = dic["Event"].lower()
-    if (event == "subscribe"):
+    if event == "subscribe":
         eventkey = dic.get("EventKey", "")
         if eventkey.startswith(SUBSCRIBE_QRSCENE):
             return SubscribeScanEvent(dic)

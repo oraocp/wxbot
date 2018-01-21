@@ -7,8 +7,8 @@
 from unittest import TestCase
 
 from weixin.api.client import WxClient
-from weixin.logger import set_logger
 from weixin.api.models import *
+from weixin.logger import set_logger
 
 
 class WxClientClass(TestCase):
@@ -68,21 +68,18 @@ class WxClientClass(TestCase):
         # 删除数据时会报：47001, 'data format error hint
         self.client.remove_material(media_id)
 
-    def test_fans_group(self):
+    def test_user_tags(self):
+        # 创建组
+        nt = self.client.create_tag("明日之星")
+        print(nt)
         # 获取所有的组
-        self.client.remove_group(100)
-        groups = self.client.get_all_group()
-        for group in groups:
-            print(group)
-            # 创建组
-            # g = self.client.create_group("钻石王老五")
-            # print(g)
+        tags = self.client.get_all_tags()
+        for t in tags:
+            print(t)
+        if nt:
+            self.client.remove_tag(nt.id)
 
-            # if group:
-            # print(self.client.update_group(100, "群众2"))
-            # print(self.client.update_group(100, gname))
-
-    def test_fans(self):
+    def test_users(self):
         # 获取所有的用户
         userinfos = self.client.get_userlist()
         print(userinfos)

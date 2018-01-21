@@ -41,7 +41,7 @@ class WxMenu(Jsonable):
                 self.items.append(submenu)
 
     def to_json(self):
-        return json.dumps(self.items, default=parse_menuitem)
+        return json.dumps(self.items, ensure_ascii=False, default=parse_menuitem)
 
 
 MENUITEM_TYPES = {}
@@ -71,7 +71,7 @@ class MenuItem(Jsonable, metaclass=MenuItemMetaClass):
         self.sub_button.append(sub_menuitem)
 
     def to_json(self):
-        return json.dumps(self.__dict__, default=parse_menuitem)
+        return json.dumps(self.__dict__, ensure_ascii=False, default=parse_menuitem)
 
 
 class ClickMenuItem(MenuItem):
