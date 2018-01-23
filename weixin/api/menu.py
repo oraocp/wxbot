@@ -7,6 +7,7 @@
 
 from weixin.api.models import Jsonable
 import json
+from weixin.logger import log
 
 
 def parse_menuitem(obj):
@@ -24,7 +25,16 @@ class WxMenu(Jsonable):
 
     def __init__(self, dic):
         self.items = []
-        for button in dic["menu"]["button"]:
+        if dic is None or len(dic) == 0:
+            return
+        if "menu" in dic.keys():
+            buttons = dic["menu"]["button"]
+        elif "button" in dic.keys():
+            buttons = dic["button"]
+        else:
+            log.warn("菜单初始化数据格式错误：找不到'button'键值!")
+            return
+        for button in buttons:
             if "type" in button.keys():
                 # 叶子菜单（包括一级或二级）
                 menuclass = MENUITEM_TYPES[button["type"]]
@@ -40,8 +50,12 @@ class WxMenu(Jsonable):
                     submenu.add_submenuitem(menuitme)
                 self.items.append(submenu)
 
-    def to_json(self):
-        return json.dumps(self.items, ensure_ascii=False, default=parse_menuitem)
+    def to_json(self, contains_menu=False):
+        if contains_menu:
+            template = '{"menu":{"button":%s}}'
+        else:
+            template = '{"button":%s}'
+        return template % json.dumps(self.items, ensure_ascii=False, default=parse_menuitem)
 
 
 MENUITEM_TYPES = {}
@@ -52,7 +66,6 @@ class MenuItemMetaClass(type):
         return type.__new__(mcs, name, bases, attrs)
 
     def __init__(cls, name, bases, attrs):
-        print("Call MenuItemMetaClass.__init__")
         if '__type__' in attrs:
             MENUITEM_TYPES[attrs['__type__']] = cls
         type.__init__(cls, name, bases, attrs)
@@ -71,7 +84,8 @@ class MenuItem(Jsonable, metaclass=MenuItemMetaClass):
         self.sub_button.append(sub_menuitem)
 
     def to_json(self):
-        return json.dumps(self.__dict__, ensure_ascii=False, default=parse_menuitem)
+        return self.__dict__
+        # return json.dumps(self.__dict__, ensure_ascii=False, default=parse_menuitem)
 
 
 class ClickMenuItem(MenuItem):
@@ -86,9 +100,13 @@ class ClickMenuItem(MenuItem):
         MenuItem.__init__(self, dic)
         # 菜单KEY值，用于消息接口推送，不超过128字节
         self.key = dic["key"]
+        self.type = ClickMenuItem.__type__
 
     def __repr__(self):
         return repr(self.name, self.key, self.sub_button)
+
+    def __str__(self):
+        return self.__repr__(self)
 
 
 class ViewMenuItem(MenuItem):
@@ -103,6 +121,7 @@ class ViewMenuItem(MenuItem):
         MenuItem.__init__(self, dic)
         # 网页链接，用户点击菜单可打开链接，不超过1024字节
         self.url = dic["url"]
+        self.type = ViewMenuItem.__type__
 
     def __repr__(self):
         return repr(self.name, self.url, self.sub_button)

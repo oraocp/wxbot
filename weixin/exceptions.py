@@ -47,6 +47,10 @@ def check_api_error(result):
 
 
 class WxApiException(WxExcepion):
+    """
+    当调用微信API时发生错误时，抛出此异常
+    """
+
     def __init__(self, errcode, errmsg):
         self.errcode = errcode
         self.errmsg = errmsg

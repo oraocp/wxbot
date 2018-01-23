@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 # -------------------------------------------------------------------------
-# 文件目的：
+# 文件目的：封装微信提供的API，方便系统调用
 # 创建日期：2018/1/4
+# 微信API官方文档地址为： https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1445241432
 # -------------------------------------------------------------------------
 
 import requests
 
 from weixin.api.models import *
-from weixin.exceptions import check_api_error
+from weixin.exceptions import check_api_error, WxApiException
 from weixin.logger import log
 from weixin.utils import Lockable, deprecated
 from weixin.api.menu import WxMenu
+
 
 # ---------------------------------------------------------------------------
 #   Requestor
@@ -36,7 +38,7 @@ class DefaultRequstor(Requestor):
     def get(self, url, params=None, **kwargs):
         r = requests.get(url, params=params, **kwargs)
         if isinstance(r, requests.Response):
-            print(r.text)
+            print("r:", r.text)
             # 假定微信返回的结果都是json字符串
             r = r.json()
             check_api_error(r)
@@ -111,32 +113,54 @@ class WxClient(Lockable):
             self.release_lock()
 
     # ---------------------------------------------------------------------------
-    # ~ 菜单相关
+    # ~ 自定义菜单相关
 
-    def create_menus(self, menu_data):
+    def create_menus(self, menu):
         """
-        创建微信公众号的菜单
-        :param menu_data: 菜单数据为json格式
+        创建微信公众号的自定义菜单
+        自定义菜单能够帮助公众号丰富界面，让用户更好更快地理解公众号的功能
+        :param menu: WxMenu类型或者Json格式字符串
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421141013
         """
         url = "https://api.weixin.qq.com/cgi-bin/menu/create?access_token={0}".format(self.token)
-        r = self.requestor.post(url, data=menu_data)
+        # 如果是WxMenu类型，需将其转换为Json格式字符串
+        if isinstance(menu, WxMenu):
+            data = menu.to_json().encode('utf-8')
+        else:
+            data = menu
+        r = self.requestor.post(url, data=data)
         return r
 
     def get_menus(self):
         """
-        获取微信公众号的菜单,数据格式为json
+        使用接口创建自定义菜单后，开发者还可使用接口查询自定义菜单的结构
+        请注意，在设置了个性化菜单后，使用本自定义菜单查询接口可以获取默认菜单和全部个性化菜单信息
+        参见:https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421141014
         """
         url = "https://api.weixin.qq.com/cgi-bin/menu/get?access_token={0}".format(self.token)
-        r = self.requestor.get(url)
+        try:
+            r = self.requestor.get(url)
+        except WxApiException as e:
+            if e.errcode == 46003:
+                # 对于菜单不存在的异常，返回空菜单对象
+                return WxMenu(None)
+            raise e
         return WxMenu(r)
 
     def remove_menus(self):
         """
-        删除微信公众号的菜单
+        使用接口创建自定义菜单后，开发者还可使用接口删除当前使用的自定义菜单
+        请注意，在个性化菜单时，调用此接口会删除默认菜单及全部个性化菜单
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421141015
         """
         url = "https://api.weixin.qq.com/cgi-bin/menu/delete?access_token={0}".format(self.token)
-        r = self.requestor.get(url)
-
+        try:
+            r = self.requestor.get(url)
+        except WxApiException as e:
+            if e.errcode == 46003:
+                # 对于菜单不存在的异常，返回空菜单对象
+                return WxMenu(None)
+            raise e
         return r
 
     # ---------------------------------------------------------------------------
@@ -212,8 +236,13 @@ class WxClient(Lockable):
         :param writer:  输出流
         :param stream: 是否启用流模式，默认为True
         """
+        # 处理新增图片素材返回值的问题
+        if isinstance(media_id, tuple):
+            mid = media_id[0]
+        else:
+            mid = media_id
         url = "https://api.weixin.qq.com/cgi-bin/material/get_material?access_token={0}&media_id={1}".format(self.token,
-                                                                                                             media_id)
+                                                                                                             mid)
         self.requestor.download_file(url, None, writer, stream)
 
     def get_material_video(self, media_id):
@@ -233,12 +262,13 @@ class WxClient(Lockable):
         它可以删除公众号在公众平台官网素材管理模块中新建的图文消息、语音、视频等素材
         临时素材无法通过本接口删除
         :param media_id: 媒体标识
-        :return:
         """
         url = "https://api.weixin.qq.com/cgi-bin/material/del_material?access_token={0}".format(self.token)
-        data = {
-            "media_id": media_id
-        }
+        if isinstance(media_id, tuple):
+            mid = media_id[0]
+        else:
+            mid = media_id
+        data = '{"media_id":"%s"}' % mid
         r = self.requestor.post(url, data=data)
         return r
 
@@ -288,8 +318,10 @@ class WxClient(Lockable):
     def get_userinfo(self, openid, lang="zh_CN"):
         """
         获取微信用户基本信息
-        :param open_id:
-        :return:
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421140839
+        :param openid: 普通用户的标识，对当前公众号唯一
+        :param lang: 返回国家地区语言版本，zh_CN 简体，zh_TW 繁体，en 英语
+        :return: Subscriber对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/user/info?access_token={0}".format(self.token)
         params = {
@@ -302,8 +334,9 @@ class WxClient(Lockable):
     def get_userlist(self, first_open_id=None):
         """
         批量获取公众号对应的用户列表
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421140840
         :param first_open_id: 第一个拉取的OPENID，不填默认从头开始拉取
-        :return: 用户列表
+        :return: 用户列表SubscriberInfos对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/user/get?access_token={0}".format(self.token)
         params = {}
@@ -311,6 +344,19 @@ class WxClient(Lockable):
             params["next_openid"] = first_open_id
         r = self.requestor.get(url, params)
         return SubscriberInfos(r)
+
+    def remark_user(self, openid, remark):
+        """
+        设置用户备注名
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1421140838
+        :param openid:
+        :param remark:
+        :return:
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/user/get?access_token={0}".format(self.token)
+        data = '{"openid":"%s", "":"%s"}' % (openid, remark)
+        r = self.requestor.post(url, data=data)
+        return r
 
     # ---------------------------------------------------------------------------
     # ~ 微信用户标签相关
@@ -386,7 +432,7 @@ class WxClient(Lockable):
         r = self.requestor.post(url, data=data)
         return r["count"]
 
-    def cancel_tag_users(selfself, id, users):
+    def cancel_tag_users(self, id, users):
         """
         批量为用户取消标签
         :param id:
@@ -402,57 +448,6 @@ class WxClient(Lockable):
         :return:
         """
         pass
-
-    # ---------------------------------------------------------------------------
-    # ~ 微信用户组相关， 已废弃
-
-    @deprecated()
-    def get_all_group(self):
-        """
-        获取公众号的所有微信用户组别
-        :return:
-        """
-        groups = []
-        url = "https://api.weixin.qq.com/cgi-bin/groups/get?access_token={0}".format(self.token)
-        r = self.requestor.get(url)
-        for g in r["groups"]:
-            groups.append(Group(g["id"], g["name"], g["count"]))
-        return groups
-
-    def get_user_group(self, open_id):
-        """
-        获取微信用户所在的组信息
-        :param open_id:  微信用户的标识
-        :return: 组信息
-        """
-        url = "https://api.weixin.qq.com/cgi-bin/groups/getid?access_token={0}".format(self.token)
-        data = {"openid": open_id}
-        return self.requestor.get(url, data=data)
-
-    def update_group(self, group_id, group_name):
-        """
-        更新微信用户组信息
-        :param group_id:  组标识
-        :param group_name: 组名称
-        :return:
-        """
-        url = "https://api.weixin.qq.com/cgi-bin/groups/update?access_token={0}".format(self.token)
-        data = '{"group": {"id":"%s","name":"%s"}' % (group_id, group_name.encode("utf-8"))
-        return self.requestor.post(url, data=data)
-
-    def remove_group(self, group_id):
-        """
-        删除微信用户组
-        :param group_id:
-        :return:
-        """
-        url = "https://api.weixin.qq.com/cgi-bin/groups/delete?access_token={0}".format(self.token)
-        data = {
-            "group": {
-                "id": group_id
-            }
-        }
-        return self.requestor.post(url, data=data)
 
     # ---------------------------------------------------------------------------
     # ~ 群发消息

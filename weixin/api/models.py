@@ -90,7 +90,7 @@ class Subscriber(Jsonable):
         self.groupid = dic.get("groupid")
         tagids = dic.get("tagids", None)
         self.tagids = []
-        if not(tagids is None):
+        if not (tagids is None):
             for tagid in tagids:
                 self.tagids.append(tagid)
 
@@ -136,10 +136,12 @@ class Group(Jsonable):
         # 组内用户数量
         self.count = count
 
+
 class Tag(Jsonable):
     """
     定义用户标签对象
     """
+
     def __init__(self, id, name, count=0):
         Jsonable.__init__(self)
         # 标签标识
@@ -148,6 +150,8 @@ class Tag(Jsonable):
         self.name = name
         # 标签对应的用户数量
         self.count = count
+
+
 # ---------------------------------------------------------------------------
 #   永久素材管理
 # ---------------------------------------------------------------------------
@@ -161,6 +165,13 @@ class MaterialCount(Jsonable):
         self.voice_count = voice_count
         self.video_count = video_count
         self.image_count = image_count
+
+class MaterialList(Jsonable):
+
+    def __init__(self, dic):
+        self.total_count = dic["total_count"]
+        self.item_
+
 
 
 class MaterailItem(object):
