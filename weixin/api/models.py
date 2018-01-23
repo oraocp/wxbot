@@ -169,13 +169,15 @@ class MaterialCount(Jsonable):
 class MaterialList(Jsonable):
 
     def __init__(self, dic):
+        self.items = []
         self.total_count = dic["total_count"]
-        self.item_
+        self.item_count = dic["item_count"]
+
 
 
 
 class MaterailItem(object):
-    def __init__(self, dct):
+    def __init__(self, dic):
         pass
 
 
