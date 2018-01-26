@@ -45,7 +45,7 @@ class WxClientClass(TestCase):
         # 1.取现有自定义菜单
         menu = self.client.get_menus()
         print(menu.to_json())
-        self.assertTrue( len(menu.items) >= 0)
+        self.assertTrue(len(menu.items) >= 0)
 
         # 2.删除所有菜单
         self.client.remove_menus()
@@ -102,7 +102,6 @@ class WxClientClass(TestCase):
     def test_material(self):
         """
         测试永久素材API
-        :return:
         """
         # 1. 上传永久素材图片
         # open("ad1.jpg", encoding="utf-8") 出现  'utf-8' codec can't decode byte 0xff in position 0: invalid start byte
@@ -112,27 +111,45 @@ class WxClientClass(TestCase):
             media_id = self.client.upload_material(MediaType.Image, f)
         # 2. 下载永久素材图片
         with open("temp3.jpg", mode="wb") as w:
-            self.client.download_material(media_id, w)
-        # 3. 获取永久素材列表
+            self.client.download_material(media_id, w, False)
+        # 3. 获取永久素材数量
         mc = self.client.get_material_count()
         self.assertTrue(mc.image_count >= 0)
         print("material_count:", mc)
-        # 4. 获取永久素材图片
-
+        # 4. 获取永久素材列表
+        try:
+            material_list = self.client.get_material_list(MediaType.Image)
+            print(material_list.to_json())
+        except Exception as e:
+            print(e)
         # 5. 移除新上传的图片
         self.client.remove_material(media_id)
 
+    def test_get_news_list(self):
+        material_list = self.client.get_material_list(MediaType.News)
+        print(material_list.to_json())
 
-
-    def _test_material_viedo(self):
-        # 测试上传视频永久素材
+    def test_material_viedo(self):
+        """
+        测试永久素材-视频API
+        """
+        # 1. 上传视频
         with open("fu.mp4", mode="rb") as f:
-            media_id = self.client.upload_material_video("春节福来到", "随着灯笼摆动，喜气四处飘散，福满人间.", f)
+            media_id = self.client.upload_video("春节福来到", "随着灯笼摆动，喜气四处飘散，福满人间.", f)
+        video_info = self.client.get_video_info(media_id)
+        print(video_info)
+        # 下载视频
+        with open("temp_fu.mp4", mode="wb") as w:
+            self.client.requestor.download_file(video_info.down_url, w)
+        # 2. 检查视频数量
         mc = self.client.get_material_count()
         self.assertTrue(mc.video_count > 0)
         print("material_count:", mc)
-        # 删除数据时会报：47001, 'data format error hint
+        # 3. 移除视频
         self.client.remove_material(media_id)
+
+    def test_news(self):
+        pass
 
     def test_user_tags(self):
         """

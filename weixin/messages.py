@@ -16,8 +16,6 @@ def register_message(msg_type):
     return register
 
 
-
-
 # ---------------------------------------------------------------------------
 #   Handler
 # ---------------------------------------------------------------------------
@@ -36,6 +34,7 @@ class BaseMessage(object):
         self.createTime = dic['CreateTime']
         # 消息类型
         self.msgType = dic['MsgType']
+
 
 # ---------------------------------------------------------------------------
 #   InputMessage
@@ -61,7 +60,7 @@ class TextInputMessage(InputMessage):
     def __init__(self, dic):
         super().__init__(dic)
         # 文本消息内容
-        self.content =  dic['Content']
+        self.content = dic['Content']
 
 
 @register_message('image')

@@ -9,9 +9,13 @@ import time
 from enum import Enum
 
 
+def parse_obj(obj):
+    return obj.__dict__
+
+
 class Jsonable(object):
     def to_json(self):
-        return json.dumps(self.__dict__, ensure_ascii=False)
+        return json.dumps(self.__dict__, ensure_ascii=False, default=parse_obj)
 
     def __str__(self):
         return self.to_json()
@@ -33,6 +37,8 @@ class MediaType(Enum):
     Video = "video"
     # 缩略图
     Thumb = "thumb"
+    # 图文消息
+    News = "news"
 
 
 # ---------------------------------------------------------------------------
@@ -69,9 +75,7 @@ class AccessToken(Jsonable):
 
 class Subscriber(Jsonable):
     """
-    定义关注者对象
-    :param Jsonable:
-    :return:
+    定义公众号关注者对象
     """
 
     def __init__(self, dic):
@@ -101,7 +105,6 @@ class SubscriberInfos(Jsonable):
     """
 
     def __init__(self, dic):
-        print(dic)
         Jsonable.__init__(self)
         # 关注该公众账号的总用户数
         self.total = dic["total"]
@@ -142,14 +145,29 @@ class Tag(Jsonable):
     定义用户标签对象
     """
 
-    def __init__(self, id, name, count=0):
+    def __init__(self, dic):
         Jsonable.__init__(self)
         # 标签标识
-        self.id = id
+        self.id = dic.get("id", id)
         # 标签名称
-        self.name = name
+        self.name = dic.get("name", name)
         # 标签对应的用户数量
-        self.count = count
+        self.count = dic.get("count", 0)
+
+
+class TagUsers(Jsonable):
+    """
+    定义标签下粉丝列表接口返回的信息
+    """
+
+    def __init__(self, dic):
+        Jsonable.__init__(self)
+        self.count = int(dic["count"])
+        self.next_openid = dic["next_openid"]
+        self.items = []
+        if self.count > 0:
+            for openid in dic["openid"]:
+                self.items.append(openid)
 
 
 # ---------------------------------------------------------------------------
@@ -166,35 +184,39 @@ class MaterialCount(Jsonable):
         self.video_count = video_count
         self.image_count = image_count
 
+
 class MaterialList(Jsonable):
+    """
+    分类型获取永久素材的列表对象
+    """
 
-    def __init__(self, dic):
+    def __init__(self, media_type, dic):
         self.items = []
-        self.total_count = dic["total_count"]
-        self.item_count = dic["item_count"]
+        self.total_count = int(dic["total_count"])
+        self.item_count = int(dic["item_count"])
+        if self.item_count > 0:
+            for dic_item in dic["item"]:
+                if media_type == MediaType.News:
+                    self.items.append(ArticleItem(dic_item))
+                else:
+                    self.items.append(MaterailItem(dic_item))
 
 
-
-
-class MaterailItem(object):
-    def __init__(self, dic):
-        pass
-
-
-class VideoItem(object):
+class MaterailItem(Jsonable):
+    """
+    定义其他类型（图片、语音、视频）素材对象
     """
 
-    """
-
     def __init__(self, dic):
-        self.title = dic.get("title")
-        self.description = dic.get("descripton")
-        self.down_url = dic.get("down_url")
+        self.media_id = dic["media_id"]
+        self.name = dic["name"]
+        self.update_time = dic["update_time"]
+        self.url = dic["url"]
 
 
 class ArticleItem(object):
     """
-
+    定义永久图文消息素材对象
     """
 
     def __init__(self, dic):
@@ -204,10 +226,10 @@ class ArticleItem(object):
         self.thumb_media_id = dic["thumb_media_id"]
         # 是否显示封面，0为false，即不显示，1为true，即显示
         self.show_cover_pic = dic["show_cover_pic"]
-        # 作者
-        self.author = dic["author"]
-        # 图文消息的摘要，仅有单图文消息才有摘要，多图文此处为空
-        self.digest = dic["digest"]
+        # 作者(可选）
+        self.author = dic.get("author", None)
+        # 图文消息的摘要，仅有单图文消息才有摘要，多图文此处为空(可选）
+        self.digest = dic.get("digest", None)
         # 图文消息的具体内容，支持HTML标签，必须少于2万字符，小于1M，且此处会去除JS
         self.content = dic["content"]
         # 图文页的URL
@@ -216,8 +238,30 @@ class ArticleItem(object):
         self.content_source_url = dic["content_source_url"]
 
 
-class MaterialList(object):
-    def __init__(self, total_count, item_count, items):
-        self.total_count = total_count
-        self.item_count = item_count
-        self.items = items
+class VideoInfo(Jsonable):
+    """
+    定义视频信息
+    """
+
+    def __init__(self, dic):
+        self.title = dic.get("title")
+        self.description = dic.get("descripton")
+        self.down_url = dic.get("down_url")
+
+
+# ---------------------------------------------------------------------------
+#   消息群发管理
+# ---------------------------------------------------------------------------
+
+class MessageStatus(Enum):
+    """
+    定义消息发送状态
+    """
+    # 消息发送成功
+    SUCCESS = "SEND_SUCCESS"
+    # 消息发送中
+    SENDING = "SENDING"
+    # 消息发送失败
+    SEND_FAIL = "SEND_FAIL"
+    # 已删除
+    DELETE = "DELETE"

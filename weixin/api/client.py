@@ -26,7 +26,7 @@ class Requestor(object):
     def download_file(self, url, params=None, writer=None, stream=False, **kwargs):
         raise NotImplementedError('Requestor的子类没有实现download_file方法')
 
-    def post(self, url, params=None, data=None, **kwargs):
+    def download_file(self, url, writer=None, stream=False, data=None, **kwargs):
         raise NotImplementedError('Requestor的子类没有实现http_post方法')
 
 
@@ -35,20 +35,25 @@ class DefaultRequstor(Requestor):
     默认的HTTP请求处理器
     """
 
-    def get(self, url, params=None, **kwargs):
+    def get(self, url, params=None, encoding='utf-8', **kwargs):
         r = requests.get(url, params=params, **kwargs)
-        if isinstance(r, requests.Response):
-            print("r:", r.text)
-            # 假定微信返回的结果都是json字符串
-            r = r.json()
-            check_api_error(r)
+        r.encoding = encoding
+        # 假定微信返回的结果都是json字符串
+        r = r.json()
+        check_api_error(r)
         return r
 
-    def download_file(self, url, params=None, writer=None, stream=False, **kwargs):
+    def download_file(self, url, writer, stream=False, data=None, **kwargs):
         if writer is None:
             raise ValueError("在Stream模式下下载文件时，输出流对象不能为空.")
-        r = requests.get(url, params=params, stream=stream, **kwargs)
-        r.raise_for_status()
+        if data is None:
+            r = requests.get(url, stream=stream, **kwargs)
+        else:
+            r = requests.post(url, data=data, **kwargs)
+        # 修正bug-1， 即微信返回失败记录，如"{errcode;40017,errmsg:'media_id is not valid hint", 系统不返回失败
+        # 导致会将错误文本当作记录写入到下载素材文件流中
+        if "Content-Type" in r.headers.keys() and r.headers["Content-Type"] == 'text/plain':
+            check_api_error(r.json())
         if stream:
             for chunk in r.iter_content(chunk_size=512):
                 if chunk:
@@ -56,8 +61,11 @@ class DefaultRequstor(Requestor):
         else:
             writer.write(r.content)
 
-    def post(self, url, params=None, data=None, files=None, **kwargs):
-        r = requests.post(url, params=params, data=data, files=files).json()
+    def post(self, url, params=None, data=None, files=None, headers=None, encoding='utf-8', **kwargs):
+        r = requests.post(url, params=params, data=data, files=files, headers=headers, **kwargs)
+        r.encoding = encoding
+        # 假定微信返回的结果都是json字符串
+        r = r.json()
         check_api_error(r)
         return r
 
@@ -169,6 +177,7 @@ class WxClient(Lockable):
     def upload_media(self, media_type, media_file):
         """
         上传临时素材文件
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738726
         :param media_type: 媒体类型
         :param media_file: 输入文件流
         :return: 返回微信提供的媒体标识Id
@@ -183,12 +192,13 @@ class WxClient(Lockable):
     def download_media(self, media_id, writer, stream=True):
         """
         下载临时素材文件
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738727
         :param media_id:  媒体标识
         :param writer:  输出流
         :param stream: 是否启用流模式，默认为True
         """
         url = "https://api.weixin.qq.com/cgi-bin/media/get?access_token={0}&media_id={1}".format(self.token, media_id)
-        self.requestor.download_file(url, None, writer, stream)
+        self.requestor.download_file(url, writer, stream)
 
     # ---------------------------------------------------------------------------
     # ~ 永久素材相关
@@ -196,6 +206,7 @@ class WxClient(Lockable):
     def upload_material(self, media_type, media_file):
         """
         上传除视频外的其它类型永久素材
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738729
         :param media_type: 媒体文件类型，分别有图片（image）、语音（voice）、和缩略图（thumb）
         :param media_file: 媒体文件
         :return: 返回的即为新增的图文消息素材的media_id; 当上传类型为图片时，返回tuple结构的(media_id,url)
@@ -210,9 +221,10 @@ class WxClient(Lockable):
             return r["media_id"], r["url"]
         return r["media_id"]
 
-    def upload_material_video(self, title, introduction, media_file):
+    def upload_video(self, title, introduction, media_file):
         """
         上传视频类型的永久素材
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738729
         :param title: 视频素材的标题
         :param introduction: 视频素材的描述
         :param media_file: 媒体文件
@@ -232,6 +244,7 @@ class WxClient(Lockable):
     def download_material(self, media_id, writer, stream=True):
         """
         下载其他类型的永久素材消息，则响应的直接为素材的内容，开发者可以自行保存为文件
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738730
         :param media_id:  媒体标识
         :param writer:  输出流
         :param stream: 是否启用流模式，默认为True
@@ -243,24 +256,15 @@ class WxClient(Lockable):
             mid = media_id
         url = "https://api.weixin.qq.com/cgi-bin/material/get_material?access_token={0}&media_id={1}".format(self.token,
                                                                                                              mid)
-        self.requestor.download_file(url, None, writer, stream)
-
-    def get_material_video(self, media_id):
-        """
-        获取视图素材
-        :param media_id:
-        :return:
-        """
-        url = "https://api.weixin.qq.com/cgi-bin/material/get_material?access_token={0}&media_id={1}".format(self.token,
-                                                                                                             media_id)
-        r = self.requestor.get(url)
-        return r["title"], r["description"], r["down_url"]
+        data = '{"media_id":"%s"}' % mid
+        self.requestor.download_file(url, writer, stream, data=data)
 
     def remove_material(self, media_id):
         """
         删除永久素材,节省空间
         它可以删除公众号在公众平台官网素材管理模块中新建的图文消息、语音、视频等素材
         临时素材无法通过本接口删除
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738731
         :param media_id: 媒体标识
         """
         url = "https://api.weixin.qq.com/cgi-bin/material/del_material?access_token={0}".format(self.token)
@@ -275,7 +279,8 @@ class WxClient(Lockable):
     def get_material_count(self):
         """
         获取永久素材的数量
-        :return:
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738733
+        :return: MaterialCount对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/material/get_materialcount?access_token={0}".format(self.token)
         r = self.requestor.get(url, None)
@@ -284,16 +289,24 @@ class WxClient(Lockable):
     def get_material_list(self, media_type, offset=0, count=10):
         """
         获取永久素材的列表,也包含公众号在公众平台官网素材管理模块中新建的图文消息、语音、视频等素材
+        参见：https://mp.weixin.qq.com/wiki?t=resource/res_main&id=mp1444738734
         :return: 永久素材的列表
         """
         url = "https://api.weixin.qq.com/cgi-bin/material/batchget_material?access_token={0}".format(self.token)
-        data = {
-            "type": media_type.value,
-            "offset": offset,
-            "count": count
-        }
+        data = '{"type":"%s","offset":%d,"count":%d}' % (media_type.value, offset, count)
         r = self.requestor.post(url, data=data)
-        return r
+        return MaterialList(media_type, r)
+
+    def get_video_info(self, media_id):
+        """
+        获取了永久视图素材信息
+        :param media_id: 媒体标识
+        :return:
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/material/get_material?access_token={0}".format(self.token)
+        data = '{"media_id":"%s"}' % media_id
+        r = self.requestor.post(url, data=data)
+        return VideoInfo(r)
 
     # ---------------------------------------------------------------------------
     # ~ 图文信息相关
@@ -371,7 +384,6 @@ class WxClient(Lockable):
         :return: 标签对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/tags/create?access_token={0}".format(self.token)
-        # '{"tag": {"name": "ChenMing2"}}'
         data = '{"tag":{"name":"%s"}}' % name
         r = self.requestor.post(url, data=data)
         return Tag(r["id"], r["name"])
@@ -385,61 +397,66 @@ class WxClient(Lockable):
         url = "https://api.weixin.qq.com/cgi-bin/tags/get?access_token={0}".format(self.token)
         r = self.requestor.get(url)
         for g in r["tags"]:
-            tags.append(Tag(g["id"], g["name"], g["count"]))
+            tags.append(g)
         return tags
 
-    def update_tag(self, id, new_name):
+    def update_tag(self, tag_id, new_name):
         """
         编辑公众号下的用户标签
-        :param id: 标签标识
+        :param tag_id: 标签标识
         :param new_name: 标签的新名称
         :return: 标签对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/tags/update?access_token={0}".format(self.token)
-        data = '{"tag":{"id":%d,"name":"%s"}}' % (id, new_name)
+        data = '{"tag":{"id":%d,"name":"%s"}}' % (tag_id, new_name)
         self.requestor.post(url, data=data)
 
-    def remove_tag(self, id):
+    def remove_tag(self, tag_id):
         """
         删除用户标签
-        :param id: 标签标识
+        请注意，当某个标签下的粉丝超过10w时，后台不可直接删除标签
+        :param tag_id: 标签标识
         """
         url = "https://api.weixin.qq.com/cgi-bin/tags/delete?access_token={0}".format(self.token)
-        data = '{"tag":{"id":%d}}' % id
+        data = '{"tag":{"id":%d}}' % tag_id
         self.requestor.post(url, data=data)
 
-    def get_users_in_tag(self, id, next_openid=''):
+    def get_users_in_tag(self, tag_id, next_openid=""):
         """
         获取标签下粉丝列表
-        :param id: 标签标识
-        :return:
+        :param tag_id: 标签标识
+        :param next_openid:
+        :return: TagUsers对象
         """
         url = "https://api.weixin.qq.com/cgi-bin/user/tag/get?access_token={0}".format(self.token)
-        data = '{"tag":%d, "next_openid":"%s"}' % (id, next_openid)
+        data = '{"tag":%d, "next_openid":"%s"}' % (tag_id, next_openid)
         r = self.requestor.post(url, data=data)
         return r["count"]
 
-    def tag_users(self, id, users):
+    def tag_users(self, tag_id, openids):
         """
         批量为用户打标签
         标签功能目前支持公众号为用户打上最多20个标签
-        :param id:
-        :param users:
+        :param tag_id:
+        :param openids:
         :return:
         """
         url = "https://api.weixin.qq.com/cgi-bin/user/tag/get?access_token={0}".format(self.token)
-        data = '{"tagid":%d, "openid_list":"[%s]"}' % (id, ''.join())
+        data = '{"tagid":%d, "openid_list":%s}' % (tag_id, json.dumps(openids))
         r = self.requestor.post(url, data=data)
         return r["count"]
 
-    def cancel_tag_users(self, id, users):
+    def cancel_tag_users(self, tag_id, openids):
         """
         批量为用户取消标签
-        :param id:
-        :param users:
-        :return:
+
+        :param tag_id: 标签标识
+        :param openids: 要取消的用户的openids
         """
-        pass
+        url = "https://api.weixin.qq.com/cgi-bin/tags/members/batchuntagging?access_token={0}".format(self.token)
+        data = '{"tagid":%d,"openid_list":%s}' % (tag_id, json.dumps(openids))
+        r = self.requestor.post(url, data)
+        return r
 
     def get_tags_in_user(self, openid):
         """
@@ -451,6 +468,33 @@ class WxClient(Lockable):
 
     # ---------------------------------------------------------------------------
     # ~ 群发消息
+    # https: // mp.weixin.qq.com / wiki?t = resource / res_main & id = mp1481187827_i0l21
+
+    def send_message(self):
+        pass
+
+    def send_voice(self):
+        pass
+
+    def send_image(self):
+        pass
+
+    def send_vide(self):
+        pass
+
+    def remove_message(self):
+        pass
+
+    def message_status(self, msg_id):
+        """
+        查询群发消息发送状态【订阅号与服务号认证后均可用】
+        :param msg_id: 要查询的消息标识
+        :return: MessageStatus 消息状态
+        """
+        url = "https://api.weixin.qq.com/cgi-bin/message/mass/get?access_token={0}".format(self.token)
+        data = '{"msg_id":"%s"}' % msg_id
+        r = self.requestor.post(url, data)
+        return MessageStatus(r["msg_status"])
 
     # ---------------------------------------------------------------------------
     # ~ 杂类
